@@ -17,11 +17,16 @@ jobs:
           rustup default stable
       
       - name: Build Windows App
-        working-directory: ./windows
-        run: cargo build --release
+        run: |
+          cd windows
+          cargo build --release
+          echo "Current directory: $(pwd)"
+          echo "Listing target folder:"
+          ls -la target/release/
+          cd ..
       
-      - name: Upload entire target folder
+      - name: Upload EXE
         uses: actions/upload-artifact@v4
         with:
-          name: build-folder
-          path: ./windows/target
+          name: iranvpn-windows
+          path: windows/target/release/*.exe
