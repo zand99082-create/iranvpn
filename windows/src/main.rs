@@ -7,7 +7,7 @@ fn main() -> Result<(), eframe::Error> {
     eframe::run_native(
         "Iran VPN",
         options,
-        Box::new(|_cc| Box::new(IranVpnApp::default())),
+        Box::new(|_cc| Ok(Box::new(IranVpnApp::default()))),
     )
 }
 
