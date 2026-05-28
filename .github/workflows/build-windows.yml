@@ -24,4 +24,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: iranvpn-windows
-          path: windows/target/release/*.exe
+          path: ./windows/target/release/*.exe
