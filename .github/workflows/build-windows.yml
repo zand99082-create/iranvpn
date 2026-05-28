@@ -20,8 +20,8 @@ jobs:
         working-directory: ./windows
         run: cargo build --release
       
-      - name: Upload EXE
+      - name: Upload entire target folder
         uses: actions/upload-artifact@v4
         with:
-          name: iranvpn-windows
-          path: ./windows/target/release/*.exe
+          name: build-folder
+          path: ./windows/target
