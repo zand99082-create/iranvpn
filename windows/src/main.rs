@@ -1,4 +1,4 @@
-//! Iran VPN Windows client. Wintun TUN + fallback engine (Psiphon, Xray, Rostam).
+//! Iran VPN Windows client. Wintin TUN + fallback engine (Psiphon, Xray, Rostam).
 
 use eframe::egui;
 use iran_vpn_core::{
@@ -61,8 +61,8 @@ impl eframe::App for IranVpnApp {
                 return;
             }
 
-            let status = if self.is_connecting {
-                "Connecting…"
+            let status: String = if self.is_connecting {
+                "Connecting…".to_string()
             } else if self.is_connected {
                 self.active_path
                     .as_deref()
@@ -91,14 +91,10 @@ impl eframe::App for IranVpnApp {
                 if ui.button("Connect").clicked() {
                     self.is_connecting = true;
                     self.error = None;
-                    match std::thread::scope(|s| {
-                        s.spawn(|| {
-                            let rt = tokio::runtime::Runtime::new().unwrap();
-                            rt.block_on(run_connect())
-                        })
-                        .join()
-                        .unwrap()
-                    }) {
+                    
+                    let result = run_connect_sync();
+                    
+                    match result {
                         Ok(_) => {
                             self.is_connected = true;
                             self.active_path = Some("Psiphon".to_string());
@@ -114,17 +110,19 @@ impl eframe::App for IranVpnApp {
     }
 }
 
-fn run_connect() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+fn run_connect_sync() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let rt = tokio::runtime::Runtime::new()?;
-    rt.block_on(async {
-        let sources = default_config_sources();
-        let server_list = fetch_server_list(&sources)
-            .await
-            .unwrap_or_else(|_| fallback_server_list());
-        let engine = FallbackEngine::with_server_list(server_list);
-        let runner = WindowsPathRunner;
-        engine.run(&runner).await
-    })
+    rt.block_on(run_connect_async())
+}
+
+async fn run_connect_async() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let sources = default_config_sources();
+    let server_list = fetch_server_list(&sources)
+        .await
+        .unwrap_or_else(|_| fallback_server_list());
+    let engine = FallbackEngine::with_server_list(server_list);
+    let runner = WindowsPathRunner;
+    engine.run(&runner).await
 }
 
 static WINTUN_RUNNING: AtomicBool = AtomicBool::new(false);
@@ -140,7 +138,6 @@ impl PathRunner for WindowsPathRunner {
         let kind = config.kind();
         #[cfg(target_os = "windows")]
         {
-            // Demo mode: IRAN_VPN_DEMO=1 brings up Wintun TUN
             if std::env::var("IRAN_VPN_DEMO").is_ok() && matches!(kind, PathKind::Psiphon) {
                 if let Err(e) = start_wintun_tunnel() {
                     return Err(e.into());
@@ -172,7 +169,7 @@ static WINTUN_STATE: std::sync::OnceLock<std::sync::Mutex<Option<WintunState>>> 
 
 #[cfg(target_os = "windows")]
 struct WintunState {
-    _adapter: wintun::Adapter,
+    _adapter: std::sync::Arc<wintun::Adapter>,
     session: std::sync::Arc<wintun::Session>,
     thread_handle: Option<std::thread::JoinHandle<()>>,
 }
@@ -180,9 +177,14 @@ struct WintunState {
 #[cfg(target_os = "windows")]
 fn start_wintun_tunnel() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     use std::sync::Arc;
-
-    let adapter = wintun::Adapter::create("IranVPN", "IranVPN", None)
+    
+    // First, get the Wintun singleton
+    let wintun = wintun::Wintun::get_or_install()?;
+    
+    let adapter = wintun::Adapter::create(&wintun, "IranVPN", "IranVPN", None)
         .map_err(|e| format!("Wintun create adapter: {:?}", e))?;
+    let adapter = Arc::new(adapter);
+    
     let session = adapter
         .start_session(wintun::MAX_RING_CAPACITY)
         .map_err(|e| format!("Wintun start session: {:?}", e))?;
@@ -209,14 +211,9 @@ fn start_wintun_tunnel() -> Result<(), Box<dyn std::error::Error + Send + Sync>>
 #[cfg(target_os = "windows")]
 fn run_packet_loop(session: std::sync::Arc<wintun::Session>) {
     while WINTUN_RUNNING.load(Ordering::Relaxed) {
-        match session.try_receive() {
-            Ok(Some(packet)) => {
-                // TODO: Forward packet.bytes() to SOCKS (Psiphon/Xray) when path provides proxy.
-                // Parse IP, route via tun2socks or path-specific logic.
+        match session.receive_blocking() {
+            Ok(packet) => {
                 drop(packet);
-            }
-            Ok(None) => {
-                std::thread::sleep(std::time::Duration::from_millis(1));
             }
             Err(_) => break,
         }
