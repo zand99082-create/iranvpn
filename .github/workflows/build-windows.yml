@@ -17,21 +17,12 @@ jobs:
           rustup default stable
       
       - name: Build Windows App
-        working-directory: ./windows
-        run: cargo build --release
-      
-      - name: Find and Show EXE file
         run: |
-          echo "Searching for .exe files in the 'windows' folder..."
-          Get-ChildItem -Path .\windows -Recurse -Filter *.exe | Select-Object FullName, Name, Length
+          cd windows
+          cargo build --release
       
-      - name: Upload the EXE file
+      - name: Upload EXE
         uses: actions/upload-artifact@v4
         with:
-          name: iranvpn-exe-file
-          path: .\windows\target\release\*.exe
-      - name: Upload whole windows folder (just in case)
-        uses: actions/upload-artifact@v4
-        with:
-          name: whole-windows-folder
-          path: .\windows
+          name: IranVPN-Windows
+          path: windows/target/release/*.exe
