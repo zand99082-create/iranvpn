@@ -15,13 +15,21 @@ jobs:
         run: |
           rustup install stable
           rustup default stable
+          rustup target add x86_64-pc-windows-msvc
       
-      - name: Build Windows App
+      - name: Build Windows App (Release)
         working-directory: ./windows
         run: cargo build --release
       
-      - name: Upload entire target folder
+      - name: Upload Windows Executable (exe only)
         uses: actions/upload-artifact@v4
         with:
-          name: windows-target-folder
+          name: iranvpn-windows
+          path: ./windows/target/release/*.exe
+      
+      - name: Upload entire target (full debug)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-target-full
           path: ./windows/target
