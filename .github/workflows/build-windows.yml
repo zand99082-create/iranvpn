@@ -15,21 +15,28 @@ jobs:
         run: |
           rustup install stable
           rustup default stable
-          rustup target add x86_64-pc-windows-msvc
       
       - name: Build Windows App (Release)
         working-directory: ./windows
         run: cargo build --release
       
-      - name: Upload Windows Executable (exe only)
-        uses: actions/upload-artifact@v4
-        with:
-          name: iranvpn-windows
-          path: ./windows/target/release/*.exe
+      - name: Get version
+        id: version
+        run: |
+          echo "date=$(date '+%Y.%m.%d')" >> $env:GITHUB_OUTPUT
       
-      - name: Upload entire target (full debug)
-        if: always()
-        uses: actions/upload-artifact@v4
+      - name: Create Release and Upload exe
+        uses: softprops/action-gh-release@v2
         with:
-          name: windows-target-full
-          path: ./windows/target
+          tag_name: windows-build-${{ steps.version.outputs.date }}
+          name: Windows Build - ${{ steps.version.outputs.date }}
+          body: |
+            فایل اجرایی ویندوز - تاریخ ساخت ${{ steps.version.outputs.date }}
+            
+            **نحوه استفاده:**
+            فایل iranvpn.exe را دانلود و اجرا کنید.
+          files: ./windows/target/release/*.exe
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
