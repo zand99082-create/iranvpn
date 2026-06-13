@@ -1,7 +1,7 @@
 name: Build Windows Executable
 
 on:
-  workflow_dispatch:
+  workflow_dispatch:  # اجرای دستی
 
 jobs:
   build:
@@ -16,27 +16,46 @@ jobs:
           rustup install stable
           rustup default stable
       
+      - name: Install Wintun (Pre-requisite)
+        run: |
+          curl -L -o wintun.zip https://www.wintun.net/builds/wintun-0.14.1.zip
+          unzip wintun.zip -d wintun
+          mkdir -p C:\windows\system32\drivers
+          copy wintun\bin\wintun.sys C:\windows\system32\drivers\
+      
       - name: Build Windows App (Release)
         working-directory: ./windows
-        run: cargo build --release
+        run: cargo build --release --verbose
       
-      - name: Get version
+      - name: Get version and commit
         id: version
         run: |
-          echo "date=$(date '+%Y.%m.%d')" >> $env:GITHUB_OUTPUT
+          $shortSha = "${{ github.sha }}".Substring(0, 7)
+          echo "short_sha=$shortSha" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          echo "run_id=${{ github.run_id }}" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
       
-      - name: Create Release and Upload exe
+      - name: Upload EXE as Artifact (for manual download)
+        uses: actions/upload-artifact@v4
+        with:
+          name: iranvpn-windows-${{ steps.version.outputs.short_sha }}
+          path: ./windows/target/release/iranvpn.exe
+          retention-days: 30
+      
+      - name: Create Release
+        if: success()
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: windows-build-${{ steps.version.outputs.date }}
-          name: Windows Build - ${{ steps.version.outputs.date }}
+          tag_name: windows-build-${{ steps.version.outputs.run_id }}
+          name: Windows Build (Commit ${{ steps.version.outputs.short_sha }})
           body: |
-            فایل اجرایی ویندوز - تاریخ ساخت ${{ steps.version.outputs.date }}
+            فایل اجرایی ویندوز - ساخته شده از آخرین کدها
             
-            **نحوه استفاده:**
-            فایل iranvpn.exe را دانلود و اجرا کنید.
-          files: ./windows/target/release/*.exe
+            **نکات امنیتی:**
+            - این فایل توسط گیت‌هاب اکشن ساخته شده
+            - قبل از اجرا توسط آنتی‌ویروس اسکن کنید
+            - استفاده صرفاً برای اهداف تحقیقاتی
+          files: ./windows/target/release/iranvpn.exe
           draft: false
-          prerelease: false
+          prerelease: true  # به عنوان نسخه آزمایشی
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
