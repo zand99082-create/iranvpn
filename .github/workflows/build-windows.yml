@@ -1,7 +1,7 @@
 name: Build Windows Executable
 
 on:
-  workflow_dispatch:  # اجرای دستی
+  workflow_dispatch:
 
 jobs:
   build:
@@ -16,46 +16,56 @@ jobs:
           rustup install stable
           rustup default stable
       
-      - name: Install Wintun (Pre-requisite)
+      - name: Download Wintun DLL
         run: |
           curl -L -o wintun.zip https://www.wintun.net/builds/wintun-0.14.1.zip
           unzip wintun.zip -d wintun
-          mkdir -p C:\windows\system32\drivers
-          copy wintun\bin\wintun.sys C:\windows\system32\drivers\
+          # فقط DLL مورد نیاز (amd64) را در کنار کدهای ویندوز قرار بده
+          mkdir -p windows/deps
+          copy wintun\wintun\bin\amd64\wintun.dll windows\deps\
+          # همچنین در ریشه پروژه برای دسترسی آسان
+          copy wintun\wintun\bin\amd64\wintun.dll .
       
       - name: Build Windows App (Release)
         working-directory: ./windows
         run: cargo build --release --verbose
+        env:
+          # اگر برنامه نیاز به دانستن مسیر DLL دارد
+          WINTUN_DLL_PATH: ./deps/wintun.dll
       
-      - name: Get version and commit
+      - name: Get short SHA
         id: version
         run: |
           $shortSha = "${{ github.sha }}".Substring(0, 7)
           echo "short_sha=$shortSha" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
-          echo "run_id=${{ github.run_id }}" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
       
-      - name: Upload EXE as Artifact (for manual download)
+      - name: Upload EXE and DLL as artifact
         uses: actions/upload-artifact@v4
         with:
           name: iranvpn-windows-${{ steps.version.outputs.short_sha }}
-          path: ./windows/target/release/iranvpn.exe
+          path: |
+            ./windows/target/release/iranvpn.exe
+            ./windows/deps/wintun.dll
+            ./wintun.dll
           retention-days: 30
       
       - name: Create Release
         if: success()
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: windows-build-${{ steps.version.outputs.run_id }}
+          tag_name: windows-build-${{ github.run_id }}
           name: Windows Build (Commit ${{ steps.version.outputs.short_sha }})
           body: |
-            فایل اجرایی ویندوز - ساخته شده از آخرین کدها
+            **فایل اجرایی ویندوز (آزمایشی)**
             
-            **نکات امنیتی:**
-            - این فایل توسط گیت‌هاب اکشن ساخته شده
-            - قبل از اجرا توسط آنتی‌ویروس اسکن کنید
-            - استفاده صرفاً برای اهداف تحقیقاتی
-          files: ./windows/target/release/iranvpn.exe
+            - این بیلد خودکار توسط گیت‌هاب اکشن انجام شده است.
+            - فایل `iranvpn.exe` به همراه `wintun.dll` (نسخه amd64) ارائه می‌شود.
+            - **نحوه استفاده:** هر دو فایل را در یک پوشه提取 کرده و `iranvpn.exe` را اجرا کنید.
+            - **هشدار:** نرم‌افزار تست‌نشده است. استفاده صرفاً برای اهداف تحقیقاتی.
+          files: |
+            ./windows/target/release/iranvpn.exe
+            ./wintun.dll
           draft: false
-          prerelease: true  # به عنوان نسخه آزمایشی
+          prerelease: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
